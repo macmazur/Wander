@@ -110,7 +110,7 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
                             .snippet(snippet)
 
             )
-            Toast.makeText(applicationContext,"this is toast message",Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext,"Marker setted!",Toast.LENGTH_SHORT).show()
         }
     }
 
