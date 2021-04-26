@@ -10,8 +10,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.TextView
-import android.widget.Toast
+import android.view.View
+import android.widget.*
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes
 import androidx.core.content.res.ResourcesCompat
@@ -23,10 +23,15 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import kotlinx.android.synthetic.main.activity_maps.*
+import kotlinx.android.synthetic.main.bottom_sheet.*
+import kotlinx.android.synthetic.main.map_content.*
 import org.jetbrains.anko.async
 import org.jetbrains.anko.uiThread
 import java.net.URL
 import java.util.*
+
 
 //https://medium.com/@irenenaya/drawing-path-between-two-points-in-google-maps-with-kotlin-in-android-app-af2f08992877
 //https://github.com/irenenaya/Kotlin-Practice/blob/master/MapsRouteActivity.kt
@@ -38,9 +43,7 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
     private val PERTH = LatLng(52.25240, 20.98783)
     private lateinit var markerPerth: Marker
 
-    private lateinit var txtView1 : TextView
-    private lateinit var txtView2 : TextView
-    private lateinit var txtView3 : TextView
+    private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,11 +53,52 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
                 .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
-        txtView1 = findViewById(R.id.txt_1) as TextView
-        txtView2 = findViewById(R.id.txt_2) as TextView
-        txtView3 = findViewById(R.id.txt_3) as TextView
+
+        sheetBehavior = BottomSheetBehavior.from<LinearLayout>(bottom_sheet)
+
+        /**
+         * bottom sheet state change listener
+         * we are changing button text when sheet changed state
+         * */
+        sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                when (newState) {
+                    BottomSheetBehavior.STATE_HIDDEN -> {
+                    }
+                    BottomSheetBehavior.STATE_EXPANDED ->
+                        btBottomSheet.text = "Close Bottom Sheet" //https://www.kotlindevelopment.com/why-should-use-anko/
+                    BottomSheetBehavior.STATE_COLLAPSED ->
+                        btBottomSheet.text = "Expand Bottom Sheet"
+                    BottomSheetBehavior.STATE_DRAGGING -> {
+                    }
+                    BottomSheetBehavior.STATE_SETTLING -> {
+                    }
+                }
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+            }
+        })
+
+        btBottomSheet.setOnClickListener(View.OnClickListener {
+            //expandCloseSheet()
+            if (sheetBehavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                btBottomSheet.text = "Close Bottom Sheet"
+            } else {
+                sheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                btBottomSheet.text = "Expand Bottom Sheet"
+            }
+        })
+
+        sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+
+        fab.setOnClickListener {
+
+        }
 
     }
+
 
     /**
      * Manipulates the map once available.
@@ -135,6 +179,9 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
                 txtView1.text = routes["legs"]["start_address"][0].toString()
                 txtView2.text = routes["legs"]["end_address"][0].toString()
                 txtView3.text = routes["legs"]["distance"]["text"][0].toString() + " / " + routes["legs"]["duration"]["text"][0].toString()
+
+                sheet_tittle.text = marker.title
+                sheet_position.text = marker.title
 
                 // show map with route centered
                 map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
@@ -249,9 +296,13 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
             ).show()
         }
 
-        txtView1.text = marker.title
-        txtView2.text = marker.position.toString()
-        txtView3.text = ""
+        sheet_tittle.text = marker.title
+        sheet_position.text = marker.position.toString()
+        sheet_address_from.text = ""
+        sheet_address_to.text = ""
+        sheet_distance.text = ""
+        sheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+
         // Return false to indicate that we have not consumed the event and that we wish
         // for the default behavior to occur (which is for the camera to move such that the
         // marker is centered and for the marker's info window to open, if it has one).
