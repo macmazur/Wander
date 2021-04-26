@@ -5,31 +5,33 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Drawable
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.*
+import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.DrawableCompat
-import com.beust.klaxon.*
-
+import com.google.android.gms.common.api.Status
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.net.PlacesClient
+import com.google.android.libraries.places.widget.AutocompleteSupportFragment
+import com.google.android.libraries.places.widget.listener.PlaceSelectionListener
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import kotlinx.android.synthetic.main.activity_maps.*
 import kotlinx.android.synthetic.main.bottom_sheet.*
 import kotlinx.android.synthetic.main.map_content.*
-import org.jetbrains.anko.async
-import org.jetbrains.anko.uiThread
-import java.net.URL
 import java.util.*
 
 
@@ -53,6 +55,33 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
                 .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
+        //<--Places Api
+        // Initialize the SDK
+        Places.initialize(applicationContext, getString(R.string.google_maps_key))
+        // Create a new Places client instance.
+        val placesClient: PlacesClient = Places.createClient(this)
+
+        val autocompleteFragment = supportFragmentManager
+                .findFragmentById(R.id.autocomplete_fragment) as AutocompleteSupportFragment
+
+        // Specify the types of place data to return.
+        autocompleteFragment.setPlaceFields(listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG))
+        // Set up a PlaceSelectionListener to handle the response.
+        // Set up a PlaceSelectionListener to handle the response.
+        autocompleteFragment.setOnPlaceSelectedListener(object : PlaceSelectionListener {
+            override fun onPlaceSelected(place: Place) {
+                // TODO: Get info about the selected place.
+                Log.i(TAG, "Place: ${place.name}, ${place.id}, ${place.latLng}")
+                map.addMarker(place.latLng?.let { MarkerOptions().position(it).title(place.name) })
+                map.moveCamera(CameraUpdateFactory.newLatLng(place.latLng))
+            }
+
+            override fun onError(status: Status) {
+                // TODO: Get info about the status.
+                Log.i(TAG, "Status: ${status.toString()}")
+            }
+        })
+        //-->
 
         sheetBehavior = BottomSheetBehavior.from<LinearLayout>(bottom_sheet)
 
