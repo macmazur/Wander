@@ -1,5 +1,7 @@
 package com.example.wander
 
+import android.app.Activity
+import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -17,6 +19,7 @@ import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.DrawableCompat
+import com.beust.klaxon.*
 import com.google.android.gms.common.api.Status
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -26,12 +29,18 @@ import com.google.android.gms.maps.model.*
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.PlacesClient
+import com.google.android.libraries.places.widget.Autocomplete
+import com.google.android.libraries.places.widget.AutocompleteActivity
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment
 import com.google.android.libraries.places.widget.listener.PlaceSelectionListener
+import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import kotlinx.android.synthetic.main.activity_maps.*
 import kotlinx.android.synthetic.main.bottom_sheet.*
 import kotlinx.android.synthetic.main.map_content.*
+import org.jetbrains.anko.async
+import org.jetbrains.anko.uiThread
+import java.net.URL
 import java.util.*
 
 
@@ -42,10 +51,15 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
     private lateinit var map: GoogleMap
 
     private val TAG = MapsActivity::class.java.simpleName
-    private val PERTH = LatLng(52.25240, 20.98783)
+    private val PERTH = LatLng(51.27903, 22.42859)
     private lateinit var markerPerth: Marker
 
     private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
+
+    private val AUTOCOMPLETE_REQUEST_CODE = 1
+    private val AUTOCOMPLETE_REQUEST_CODE_ROUTE_FROM = 2
+
+    private val fields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +72,7 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
         //<--Places Api
         // Initialize the SDK
         Places.initialize(applicationContext, getString(R.string.google_maps_key))
+        /*Places.initialize(applicationContext, getString(R.string.google_maps_key))
         // Create a new Places client instance.
         val placesClient: PlacesClient = Places.createClient(this)
 
@@ -80,7 +95,8 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
                 // TODO: Get info about the status.
                 Log.i(TAG, "Status: ${status.toString()}")
             }
-        })
+        })*/
+
         //-->
 
         sheetBehavior = BottomSheetBehavior.from<LinearLayout>(bottom_sheet)
@@ -123,9 +139,58 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
         sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
 
         fab.setOnClickListener {
+            // Set the fields to specify which types of place data to
+            // return after the user has made a selection.
+            //val fields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG)
 
+            // Start the autocomplete intent.
+            val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(this)
+            startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE)
         }
 
+        sheet_address_from.setOnClickListener {
+            // Start the autocomplete intent.
+            val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(this)
+            startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE_ROUTE_FROM)
+        }
+
+        btBottomRoute.setOnClickListener {
+            drawRoute()
+        }
+
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == AUTOCOMPLETE_REQUEST_CODE || requestCode == AUTOCOMPLETE_REQUEST_CODE_ROUTE_FROM) {
+            when (resultCode) {
+                Activity.RESULT_OK -> {
+                    data?.let {
+                        val place = Autocomplete.getPlaceFromIntent(data)
+                        Log.i(TAG, "Place: ${place.name}, ${place.id}, ${place.latLng}")
+                        if (requestCode == AUTOCOMPLETE_REQUEST_CODE) {
+                            map.addMarker(place.latLng?.let {
+                                MarkerOptions().position(it).title(place.name)
+                            })
+                            map.moveCamera(CameraUpdateFactory.newLatLng(place.latLng))
+                        } else {
+                            sheet_address_from.text = place.latLng.toString()
+                        }
+                    }
+                }
+                AutocompleteActivity.RESULT_ERROR -> {
+                    // TODO: Handle the error.
+                    data?.let {
+                        val status = Autocomplete.getStatusFromIntent(data)
+                        Log.i(TAG, status.statusMessage.toString())
+                    }
+                }
+                Activity.RESULT_CANCELED -> {
+                    // The user canceled the operation.
+                }
+            }
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
 
@@ -160,7 +225,7 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
         map.addMarker(MarkerOptions().position(pokorna).title("Pokorna"))
 
         markerPerth = map.addMarker(MarkerOptions().position(PERTH).title("Perth").icon(
-                vectorToBitmap(R.drawable.ic_battery_marker, Color.GREEN))) //Color.parseColor("#0066ff")
+                vectorToBitmap(R.drawable.ic_car_battery, Color.BLACK))) //Color.parseColor("#0066ff")
         markerPerth.tag = 0
 
         map.setOnMarkerClickListener(this)
@@ -218,6 +283,56 @@ class MapsActivity : AppCompatActivity(), GoogleMap.OnMarkerClickListener, OnMap
         }
         */
 
+    }
+
+    private fun drawRoute() {
+        val LatLongB = LatLngBounds.Builder()
+        val kolska = LatLng(52.25081, 20.97806)
+        val przemysl = LatLng(49.79091, 22.76648)
+
+        // Declare polyline object and set up color and width
+        val options = PolylineOptions()
+        options.color(Color.GREEN)
+        options.width(7f)
+
+        // build URL to call API
+        val url = getURL(kolska, przemysl)
+        async {
+            // Connect to URL, download content and convert into string asynchronously
+            val result = URL(url).readText()
+            uiThread {
+                // When API call is done, create parser and convert into JsonObjec
+                val parser: Parser = Parser()
+                val stringBuilder: StringBuilder = StringBuilder(result)
+                val json: JsonObject = parser.parse(stringBuilder) as JsonObject
+                // get to the correct element in JsonObject
+                val routes = json.array<JsonObject>("routes")
+                val points = routes!!["legs"]["steps"][0] as JsonArray<JsonObject>
+                // For every element in the JsonArray, decode the polyline string and pass all points to a List
+                val polypts = points.flatMap { decodePoly(it.obj("polyline")?.string("points")!!)  }
+                // Add  points to polyline and bounds
+                options.add(kolska)
+                LatLongB.include(kolska)
+                for (point in polypts)  {
+                    options.add(point)
+                    LatLongB.include(point)
+                }
+                options.add(przemysl)
+                LatLongB.include(przemysl)
+                // build bounds
+                val bounds = LatLongB.build()
+                // add polyline to the map
+                map.addPolyline(options)
+
+                //wrap data!
+                /*txtView1.text = routes["legs"]["start_address"][0].toString()
+                txtView2.text = routes["legs"]["end_address"][0].toString()
+                txtView3.text = routes["legs"]["distance"]["text"][0].toString() + " / " + routes["legs"]["duration"]["text"][0].toString()*/
+
+                // show map with route centered
+                map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+            }
+        }
     }
 
     private fun setMapStyle(map: GoogleMap) {
